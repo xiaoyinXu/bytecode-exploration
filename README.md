@@ -2,12 +2,10 @@
 
 ## 什么是Bytecode Manipulation？
 
-字节码是JVM平台语言（如Java、Kotlin、Scala、groovy）的概念，本文以Java为例。Java源文件在被
-编译的时候，并不会直接被编译成机器代码，而会被编译成以.class后缀的
-字节码文件并一般存储到硬盘上，只有程序真正执行的时候，".class"文件才会被翻译成与操作系统、处理器架构
-适配的可执行机器代码，而".class"文件存储的内容其实就是字节码。
-.class文件是一种"二进制文件"，它按照顺序记录了字节码版本、类的各种元信息，如
-类名、父类、接口、实例属性、实例方法、静态属性、静态方法、注解等，本质上它就是一个byte数组，如果我们能按照字节码规范去创建/修改一个已存在的byte数组，那我们就可以做到创建类以及修改类的各种行为。
+字节码是JVM平台语言（如Java、Kotlin、Scala、groovy）的概念，本文以Java为例。Java源文件在被编译的时候，并不会直接被编译成机器代码，而会被编译成以.class后缀的字节码文件并存储到硬盘上，只有程序真正执行的时候，".class"文件才会被翻译成与操作系统、处理器架构适配的可执行机器代码，而".class"文件存储的内容其实就是字节码。
+
+.class文件是一种"二进制文件"，它按照顺序记录了很多信息，如字节码版本、常量池、类的各种元信息，如类名、父类、接口、实例属性、实例方法、静态属性、静态方法、注解等，本质上它就是一个byte数组，如果我们能按照字节码规范去创建/修改一个已存在的byte数组，那我们就可以做到创建类以及修改类的各种行为。
+
 然而去造一个byte数组是一件很困难的事，而bytecode manipulation则是辅助我们去构建这个"byte数组"的技术。
 
 #### 字节码的"各种形式"
@@ -22,21 +20,19 @@
 
 先给出结论: TODO
 
-在讨论为什么需要字节码增强技术之前，我们先谈谈Java语言本身。Java是一门静态类型语言，静态类型语言要求
-变量的类型需要显式指定且在编译期间是可知的，即当声明了变量后，其类型是无法修改的。
+在讨论为什么需要字节码增强技术之前，我们先谈谈Java语言本身。Java是一门静态类型语言，静态类型语言要求变量的类型需要显式指定且在编译期间是可知的，即当声明了变量后，其类型是无法修改的。
 
 ```java
 public class Main {
     public void main(String[] args) {
         int x = 5;
         double y = 6.0;
-        x = y  // 编译报错
+        x = y;  // 编译报错
     }
 }
 ```
 
 而相较于静态类型语言，动态类型语言不用声明变量类型，变量类型在运行时才确定，即在编译期间变量可以指向各种"对象"，整体代码风格会非常简约, 如Python
-
 ```python
 if __name__ == "__main__":
     x = 12000  
@@ -67,9 +63,7 @@ if __name__ == "__main__":
     print(student.gender) # AttributeError: 'student' object has no attribute 'gender'
 ```
 
-但很多时候，尤其是在实现通用框架的时候，"框架"是无法知道"用户"使用哪些类型的，但框架往往也需要去调用用户定义的代码，那问题来了，框架怎么
-在不知道用户类型的情况下去调用用户方法呢？对于Python这种动态类型语言，由于在编码期间IDE无法推断变量类型，这从另外一个角度上来说"框架"可以
-定义未知类型变量的任意方法，如以下代码是不会报错的, 用户只需要在使用的时候传入实现了execute_sql的方法就行。
+但很多时候，尤其是在实现通用框架的时候，"框架"是无法知道"用户"使用哪些类型的，那框架怎么在不知道用户类型的情况下去调用用户方法呢？对于Python这种动态类型语言，由于在编码期间IDE无法推断变量类型，如下代码是不会报错的, 用户只需要在使用的时候传入实现了execute_sql的方法就行。
 
 ```python
 class DriverProxy:
@@ -81,7 +75,7 @@ class DriverProxy:
  
 ```
 
-对于Java这门静态类型语言来说，如果不确定变量的具体类型，是无法调用相应的方法的。那在Java里，通用框架一般如何去调用用户代码呢？介绍两种方式
+对于Java这门静态类型语言来说，如果不确定变量的具体类型，是无法调用相应的方法的。那在Java里，框架一般如何去调用用户代码呢？介绍两种方式
 （便于说明，这里仅仅用一个静态代理来代表"第三方框架"）
 
 `方式1 （接口）`
@@ -120,8 +114,7 @@ public class Main {
 }
 ```
 
-方式1借助接口，框架不用关心用户传入的变量具体是什么类型，只要用户传入任意一个具体的实现类，框架在运行时就能调用到具体用户代码啦。
-当然了这也得益于面向对象语言多态特性。
+方式1借助接口，框架不用关心用户传入的变量具体是什么类型，只要用户传入任意一个具体的实现类，框架在运行时就能调用到具体用户代码啦。当然了这也得益于面向对象语言多态特性。
 
 `方式2 反射`
 
@@ -173,11 +166,10 @@ public class Main {
 }
 ```
 
-如上例，SecureMethodUtil用于执行用户代码前，校验当前用户是否有执行权限。"框架"不用在编译
-时关心用户类型是什么，借助反射特性，框架也能在运行时执行用户代码。
-事实上反射是Java语言很强大的特性，它提供了运行时获取类的各种元数据的能力（得益于字节码），
-在框架里经常被使用。拿fastJson、easyExcel举例，它们就是动态去获取当前对象类的所有实例属性的getter/setter方法，
-这样在类去拓展/修改字段时，相应用户代码不用做任何调整就能实现json字符串、excel文件的变化。
+如上例，SecureMethodUtil用于执行用户代码前，校验当前用户是否有执行权限。"框架"不用在编译时关心用户类型是什么，借助反射API，框架也能在运行时执行用户代码。
+
+反射是Java语言很强大的特性，它提供了运行时获取类的各种元数据的能力（得益于字节码),它在框架里经常被使用。例如fastJson、easyExcel，它们就是动态去获取当前对象类的所有实例属性的getter/setter方法，这样在类去拓展/修改字段时，相应用户代码不用做任何调整就能实现json字符串、excel文件的变化。
+
 反射为Java这门静态类型语言提供了一定的动态特性，但也存在一些问题。
 
 1. 第一个是性能问题。通过class对象去获取方法(Method)和属性(Field)的开销是很大的，但一旦缓存了Method、Field对象，之后对方法/属性的访问会快很多。
@@ -185,14 +177,15 @@ public class Main {
    部分native方法的调用会比Java方法慢，而JVM也对此做了优化，所以在很多场景中，反射不会出现性能瓶颈，感兴趣的可以看看[java relfection inflation]()
 
 2. 大量使用反射，在项目工程里无法很快发现一些属性和方法的依赖关系。如果属性和方法是显式调用的，那么很容易借助IDE知道这些属性或方法被哪些地方依赖了，但一旦用了反射，IDE就束手无策了。
-3. 第二个也是我认为最主要的问题，反射抛弃了Java静态语言类型的优势，即编译时类型检查。借助反射去执行一个方法时，method.invoke(...)的传参是否正确只有在运行时才能发现，"框架"显然不希望暴露给"用户"反射API,
+   
+3. 反射抛弃了Java静态语言类型的优势，即编译时类型检查。借助反射去执行一个方法时，method.invoke(...)的传参是否正确只有在运行时才能发现，"框架"显然不希望暴露给"用户"反射API,
    因为这会增加很多不确定性。
 
-当然以上问题不能遮盖反射在各种场景发挥的巨大作用。
+当然以上问题不能遮盖反射在各种场景发挥的巨大作用，字节码增强技术往往也会搭配反射API使用。
 
 `接下来进入正题---Bytecode Manipulation`
 
-Bytecode Manipulation让用户能够去操作字节码，也就能够控制类的各种行为，具体能做什么取决于使用者的想象力和创造力。
+Bytecode Manipulation让用户能够去操作字节码，进而能够控制类的各种行为。
 
 ## 常用Bytecode Manipulation框架简单介绍
 
@@ -213,7 +206,6 @@ public class HelloServiceImpl implements HelloService {
 ```
 
 ### jdk proxy
-
 jdk proxy即我们常说的JDK动态代理，实际上它是jdk内置的工具类，借助它我们能快速地实现动态代理。
 
 ```java
@@ -602,8 +594,7 @@ public class StudentDump implements Opcodes {
 TODO 如图
 
 你需要按照一定顺序去调用各个API，如果顺序出现问题则会"编写"出不合法的class文件，所以这对不了解class文件以及JVM底层执行方法逻辑的
-小伙伴不是很友好。asm提供出来的api实在是太琐碎了，但这也没办法，实际一个class文件就是由这么多琐碎的元素组成。乍一看asm使用起来很复杂，但基于观察者这种设计模式，当我们仅仅是想对已有类的部分模块进行修改时，
-则只需要重载相应的方法，当你熟悉了这种模式后，你就会发现ASM相较于其它bytecode manipulation能够完成更多细腻的功能。
+小伙伴不是很友好。asm提供出来的api实在是太琐碎了，但基于观察者这种设计模式，当我们仅仅是想对已有类的部分模块进行修改时，则只需要重载相应的方法，当你熟悉了这种模式后，你就会发现ASM相较于其它bytecode manipulation能够完成更多细腻的功能。
 
 #### 使用模板
 
@@ -900,27 +891,17 @@ public class ByteBuddyProxyTest {
 }
 ```
 
-第一次接触Byte-Buddy的小伙伴可能会觉得这个api使用起来非常啰嗦（习惯就好），但实际上这是为了能让用户能做更细腻度的控制。
-首先subclass代表你要继承哪个类或者实现哪个接口，之后method(...)用于筛选你想要进行拦截/重载的方法，以上就是过滤掉了
-Object声明的一些方法，紧接着intercept(...)就是方法的实现，这里最常用的api就是MethodDelegation(方法委托),它将原先的方法重载
-并委托给了其它类/对象。
+第一次接触Byte-Buddy的小伙伴可能会觉得这个api使用起来非常啰嗦（习惯就好），但实际上这是为了能让用户能做更细腻度的控制。首先subclass代表你要继承哪个类或者实现哪个接口，之后method(...)用于筛选你想要进行拦截/重载的方法，以上就是过滤掉了Object声明的一些方法，紧接着intercept(...)就是方法的实现，这里最常用的api就是MethodDelegation(方法委托),它将原先的方法重载并委托给了其它类/对象。
 
-我们重点看看这个LogImplementation这个类的实现，一般被委托的类会实现一个且仅一个方法，而最重要的地方就是方法、方法参数上的注解。
-@RuntimeType加在了方法上，代表这个方法的返回值可以是任意类型，假如不用这个注解，那么返回值必须和被委托方法(即sayHello(String))保持一致：void。
-而方法参数的注解@Origin, 指明当前method是被委托方法，而@SuperCall，指明当前callable包含了被委托方法的执行逻辑，我们只需要执行callable.call()
-就能触发被委托方法的逻辑。除了这些注解还有几个常用的注解, 例如`@This Object this`指明当前object是代理类实例的this指针,
-`@AllArguments Object[] args`指明args是方法的所有调用参数。一旦参数上加上了这些注解，用byte-buddy操作字节码生成的类在调用被委托方法前，
-会将这些被注解的参数按照语义赋值后，再调用LogImplementation.invoke方法,还有其它注解这里就不一一举例了。
+我们重点看看这个LogImplementation这个类的实现，一般被委托的类会实现一个且仅一个方法，而最重要的地方就是方法、方法参数上的注解。@RuntimeType加在了方法上，代表这个方法的返回值可以是任意类型，假如不用这个注解，那么返回值必须和被委托方法(即sayHello(String))保持一致：void。而方法参数的注解@Origin, 指明当前method是被委托方法，而@SuperCall，指明当前callable包含了被委托方法的执行逻辑，我们只需要执行callable.call()就能触发被委托方法的逻辑。除了这些注解还有几个常用的注解, 例如`@This Object this`指明当前object是代理类实例的this指针，`@AllArguments Object[] args`指明args是方法的所有调用参数。一旦参数上加上了这些注解，用byte-buddy操作字节码生成的类在调用被委托方法前，会将这些被注解的参数按照语义赋值后，再调用LogImplementation.invoke方法,还有其它注解这里就不一一举例了。
 
 ## java agent
 
 ### java agent是什么
 
 java agent是java很早就有的一个概念，运用字节码增强技术时一般都会和java agent搭配使用。那什么是java agent呢？
-我的理解是它是一个类加载的网关：当类被加载到类加载器之前，java agent可以对已经读取的字节码流进行修改，从而来控制类的各种行为。
-既然它是一个网关，那我们就可以对每一个加载到JVM里的类（当然，部分jdk的类会在使用java agent前初始化）进行统一控制，而不用像
-上面所有例子一样针对每一个类都要手动去编写一大段代码,这里我们先看一下java agent如何使用, 它有两种使用方式，一种是是可插拔式的静态使用方式(通过启动时指定jvm参数)，
-一种是利用java的attach api的动态使用方式（动态attach到已经启动的JVM进程）
+
+我的理解是它是一个类加载的网关：当类被加载到类加载器之前，java agent可以对已经读取的字节码流进行修改，从而来控制类的各种行为。既然它是一个网关，那我们就可以对每一个加载到JVM里的类（当然，部分jdk的类会在使用java agent前初始化）进行统一控制，而不用像上面所有例子一样针对每一个类都要手动去编写一大段代码,这里我们先看一下java agent如何使用, 它有两种使用方式，一种是是可插拔式的静态使用方式(通过启动时指定jvm参数)，一种是利用java的attach api的动态使用方式（动态attach到已经启动的JVM进程）
 
 ### 静态使用方式
 
@@ -1010,5 +991,93 @@ public class MyByteBuddyLogAgent {
 以上和我们用byte-buddy实现动态代理很像，但值得注意的是通过java agent增强的类在classloader看来还是原先的类，并非当成代理。
 
 ### 动态使用方式
+首先介绍Attach API
+#### Attach API
+JVM提供了attach api, 其实我们经常使用的jstack、jmap等命令实际都借助了它，简单来看看它是啥。
+```java
+public class AttachApiTest {
+    public static void main(String[] args) throws Exception {
+        // 模拟jps命令
+        List<VirtualMachineDescriptor> list = VirtualMachine.list();
+        for (VirtualMachineDescriptor virtualMachineDescriptor : list) {
+            String id = virtualMachineDescriptor.id();
+            String name = virtualMachineDescriptor.displayName();
+            System.out.println(String.format("%s %s", id, name));
+        }
 
-JVM提供了attach api, 其实我们经常使用的jstack、jmap等命令
+        // 模拟jstack
+        VirtualMachine virtualMachine = VirtualMachine.attach("17729"); // 替换pid
+        HotSpotVirtualMachine hotSpotVirtualMachine = (HotSpotVirtualMachine) virtualMachine;
+        InputStream inputStream = hotSpotVirtualMachine.remoteDataDump();
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+        bufferedReader.lines().forEach(System.out::println);
+
+        // 模拟jmap -histo:live
+        inputStream = hotSpotVirtualMachine.heapHisto();
+        bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+        bufferedReader.lines().forEach(System.out::println);
+
+        // 动态使用java agent, 无返回值
+        hotSpotVirtualMachine.loadAgent("{YourPath}/{your-agent}.jar");
+    }
+}
+```
+简单来说, attach api可以与一个正在运行的JVM进程进行通信(会起一个Attach Listener线程)，而loadAgent方法则用来动态使用java agent。
+一旦调用了这个api, 被attach的jvm进程会在Attach Listener线程里去执行对应agent jar的agentMain方法，它与premain一样，格式如下。
+```java
+public class JavaAgentTemplate {
+    public static void agentmain(String args, Instrumentation instrumentation) {
+        instrumentation.addTransformer(
+                new ClassFileTransformer() {
+                    @Override
+                    public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
+                        // Your Logic 
+                        // ...
+
+                        return classfileBuffer;
+                    }
+                }
+        );
+    }
+}
+```
+执行完agentmain方法之后，之后的类在被加载到类加载器前都会被ClassFileTransformer拦截， 其它地方与静态使用方式(-javaagent)没有太大差异。
+
+### 两种方式对比
+对比下来，Java Agent的静态使用方式可以从jvm刚开始运行时就去管控类的加载，在生产环境里经常使用这种方式，然而它的"缺点"就是使用起来太麻烦：需要指定MANIFEST.MF, 且需要增加JVM参数(-javaagent) 。动态使用方式需要调用attach api, 且也需要指定agent jar的路径，但是ByteBuddy已经为我们封装好了这个步骤，只需要调用ByteBuddyAgent.install(), 就能返回关键的instrumentation实例，使用起来相对静态方式会简单很多
+
+```java
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Phaser;
+
+public class DynamicJavaAgentTest {
+   public static void main(String[] args) {
+      // 1、attach当前JVM
+      // 2、找到byte-buddy-agent.jar的文件地址
+      // 3、调用VirtualMachine的loadAgent方法
+      // 4、返回instrumentation实例
+      Instrumentation instrumentation = ByteBuddyAgent.install();
+
+
+      instrumentation.addTransformer(new ClassFileTransformer() {
+         @Override
+         public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
+            // your logic
+            // 一旦获取到instrumentation实例后，你可以任意使用javassist/asm/cglib/byte-buddy
+
+
+            System.out.println(String.format("%s被加载", className));
+            return classfileBuffer;
+         }
+      });
+
+
+      // 后续类的加载都会被拦截
+      new ArrayBlockingQueue<Integer>(10);  // 打印 java/util/concurrent/ArrayBlockingQueue被加载
+   }
+}
+```
+
+#### Java Agent的"妙用"
+Java Attach API只暴露了有限的方法，而loadAgent可以让我们执行指定jar包的agentmain方法，除了增加ClassFileTransformer外，实际上你可以在agentmain
+执行任意逻辑，例如像[arthas](https://github.com/alibaba/arthas)一样，启动很多监听线程，后续可以直接与外界进行进程通信。
