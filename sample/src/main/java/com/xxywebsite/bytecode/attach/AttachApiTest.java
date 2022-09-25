@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author xuxiaoyin
@@ -23,19 +24,26 @@ public class AttachApiTest {
             System.out.println(String.format("%s %s", id, name));
         }
 
-        // 模拟jstack
-        VirtualMachine virtualMachine = VirtualMachine.attach("17729"); // 替换pid
-        HotSpotVirtualMachine hotSpotVirtualMachine = (HotSpotVirtualMachine) virtualMachine;
-        InputStream inputStream = hotSpotVirtualMachine.remoteDataDump();
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
-        bufferedReader.lines().forEach(System.out::println);
+        VirtualMachine virtualMachine = null;
+        try {
+            // 模拟jstack
+            virtualMachine = VirtualMachine.attach("17729"); // 替换成你自己的pid
+            HotSpotVirtualMachine hotSpotVirtualMachine = (HotSpotVirtualMachine) virtualMachine;
+            InputStream inputStream = hotSpotVirtualMachine.remoteDataDump();
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+            bufferedReader.lines().forEach(System.out::println);
 
-        // 模拟jmap -histo:live
-        inputStream = hotSpotVirtualMachine.heapHisto();
-        bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
-        bufferedReader.lines().forEach(System.out::println);
+            // 模拟jmap -histo:live
+            inputStream = hotSpotVirtualMachine.heapHisto();
+            bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+            bufferedReader.lines().forEach(System.out::println);
 
-        // 动态使用java agent, 无返回值
-        hotSpotVirtualMachine.loadAgent("{YourPath}/{your-agent}.jar");
+            // 动态加载java agent, 无返回值
+            hotSpotVirtualMachine.loadAgent("{YourPath}/{your-agent}.jar");
+        } finally {
+            if (Objects.nonNull(virtualMachine)) {
+                virtualMachine.detach();
+            }
+        }
     }
 }

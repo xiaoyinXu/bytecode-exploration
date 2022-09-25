@@ -1,27 +1,325 @@
 # Java Bytecode Manipulation Exploration
 
-## 什么是Bytecode Manipulation？
+## 什么是动态字节码技术？
 
-字节码是JVM平台语言（如Java、Kotlin、Scala、groovy）的概念，本文以Java为例。Java源文件在被编译的时候，并不会直接被编译成机器代码，而会被编译成以.class后缀的字节码文件并存储到硬盘上，只有程序真正执行的时候，".class"文件才会被翻译成与操作系统、处理器架构适配的可执行机器代码，而".class"文件存储的内容其实就是字节码。
+字节码是JVM平台语言（如Java、Kotlin、Scala、groovy）的概念，本文以Java为例。javac编译器并不会将Java源文件直接编译成机器代码，而是编译成以.class为后缀的文件并持久化到硬盘上，当程序被执行的时候，".class文件"会被加载到内存里，而".class"文件存储的内容其实就是字节码。
 
-.class文件是一种"二进制文件"，它按照顺序记录了很多信息，如字节码版本、常量池、类的各种元信息，如类名、父类、接口、实例属性、实例方法、静态属性、静态方法、注解等，本质上它就是一个byte数组，如果我们能按照字节码规范去创建/修改一个已存在的byte数组，那我们就可以做到创建类以及修改类的各种行为。
+如以下HelloWorld.java文件编译后的字节码文件为HelloWorld.class
+```java
+public class HelloWorld {
+    public static void main(String[] args) {
+        System.out.println("Hello World");
+    }
+}
+```
+经过`java -p HelloWorld.class`后，解析结果如下
+```sql
+Classfile /Users/xuxiaoyin/Projects/bytecode-exploration/sample/target/classes/HelloWorld.class
+  Last modified Sep 25, 2022; size 533 bytes
+  MD5 checksum 3787d3eda484722c83dac067f2f78df2
+  Compiled from "HelloWorld.java"
+public class HelloWorld
+  minor version: 0
+  major version: 52
+  flags: ACC_PUBLIC, ACC_SUPER
+Constant pool:
+   #1 = Methodref          #6.#20         // java/lang/Object."<init>":()V
+   #2 = Fieldref           #21.#22        // java/lang/System.out:Ljava/io/PrintStream;
+   #3 = String             #23            // Hello World
+   #4 = Methodref          #24.#25        // java/io/PrintStream.println:(Ljava/lang/String;)V
+   #5 = Class              #26            // HelloWorld
+   #6 = Class              #27            // java/lang/Object
+   #7 = Utf8               <init>
+   #8 = Utf8               ()V
+   #9 = Utf8               Code
+  #10 = Utf8               LineNumberTable
+  #11 = Utf8               LocalVariableTable
+  #12 = Utf8               this
+  #13 = Utf8               LHelloWorld;
+  #14 = Utf8               main
+  #15 = Utf8               ([Ljava/lang/String;)V
+  #16 = Utf8               args
+  #17 = Utf8               [Ljava/lang/String;
+  #18 = Utf8               SourceFile
+  #19 = Utf8               HelloWorld.java
+  #20 = NameAndType        #7:#8          // "<init>":()V
+  #21 = Class              #28            // java/lang/System
+  #22 = NameAndType        #29:#30        // out:Ljava/io/PrintStream;
+  #23 = Utf8               Hello World
+  #24 = Class              #31            // java/io/PrintStream
+  #25 = NameAndType        #32:#33        // println:(Ljava/lang/String;)V
+  #26 = Utf8               HelloWorld
+  #27 = Utf8               java/lang/Object
+  #28 = Utf8               java/lang/System
+  #29 = Utf8               out
+  #30 = Utf8               Ljava/io/PrintStream;
+  #31 = Utf8               java/io/PrintStream
+  #32 = Utf8               println
+  #33 = Utf8               (Ljava/lang/String;)V
+{
+  public HelloWorld();
+    descriptor: ()V
+    flags: ACC_PUBLIC
+    Code:
+      stack=1, locals=1, args_size=1
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+         4: return
+      LineNumberTable:
+        line 1: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       5     0  this   LHelloWorld;
 
-然而去造一个byte数组是一件很困难的事，而bytecode manipulation则是辅助我们去构建这个"byte数组"的技术。
+  public static void main(java.lang.String[]);
+    descriptor: ([Ljava/lang/String;)V
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=2, locals=1, args_size=1
+         0: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
+         3: ldc           #3                  // String Hello World
+         5: invokevirtual #4                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+         8: return
+      LineNumberTable:
+        line 3: 0
+        line 4: 8
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       9     0  args   [Ljava/lang/String;
+}
 
-#### 字节码的"各种形式"
+```
+通过二进制文件编辑器打开HelloWorld.class, 解析结果如下
+![](https://bj.bcebos.com/cookie/img.png)
+通过Intellij IDEA jclasslib Bytecode Viewer插件，解析结果如下
+![](https://bj.bcebos.com/cookie/img_1.png)
+从上面的截图可以看出，字节码实际就是"class文件"的二进制数据。
 
-// TODO 截图...
+对于程序最主要的组成部分---方法，实际也是一连串由操作码、操作数构成的二进制数据，解析结果如下
+![](https://bj.bcebos.com/cookie/img_2.png))
+红框里的getstatic、ldc、invokevirtual、return称之为操作码(OpCode), 后面的"参数"（根据操作码不同而不同）称之为操作数。
 
-#### 字节码在各种框架的应用
+操作码由一个字节(8bit)构成，最多为256个操作码，目前大约就200多个操作码被用到，OpenJDK8的jdk.internal.org.objectweb.asm.Opcodes里定义了如下操作码
+```
+    int NOP = 0; // visitInsn
+    int ACONST_NULL = 1; // -
+    int ICONST_M1 = 2; // -
+    int ICONST_0 = 3; // -
+    int ICONST_1 = 4; // -
+    int ICONST_2 = 5; // -
+    int ICONST_3 = 6; // -
+    int ICONST_4 = 7; // -
+    int ICONST_5 = 8; // -
+    int LCONST_0 = 9; // -
+    int LCONST_1 = 10; // -
+    int FCONST_0 = 11; // -
+    int FCONST_1 = 12; // -
+    int FCONST_2 = 13; // -
+    int DCONST_0 = 14; // -
+    int DCONST_1 = 15; // -
+    int BIPUSH = 16; // visitIntInsn
+    int SIPUSH = 17; // -
+    int LDC = 18; // visitLdcInsn
+    // int LDC_W = 19; // -
+    // int LDC2_W = 20; // -
+    int ILOAD = 21; // visitVarInsn
+    int LLOAD = 22; // -
+    int FLOAD = 23; // -
+    int DLOAD = 24; // -
+    int ALOAD = 25; // -
+    // int ILOAD_0 = 26; // -
+    // int ILOAD_1 = 27; // -
+    // int ILOAD_2 = 28; // -
+    // int ILOAD_3 = 29; // -
+    // int LLOAD_0 = 30; // -
+    // int LLOAD_1 = 31; // -
+    // int LLOAD_2 = 32; // -
+    // int LLOAD_3 = 33; // -
+    // int FLOAD_0 = 34; // -
+    // int FLOAD_1 = 35; // -
+    // int FLOAD_2 = 36; // -
+    // int FLOAD_3 = 37; // -
+    // int DLOAD_0 = 38; // -
+    // int DLOAD_1 = 39; // -
+    // int DLOAD_2 = 40; // -
+    // int DLOAD_3 = 41; // -
+    // int ALOAD_0 = 42; // -
+    // int ALOAD_1 = 43; // -
+    // int ALOAD_2 = 44; // -
+    // int ALOAD_3 = 45; // -
+    int IALOAD = 46; // visitInsn
+    int LALOAD = 47; // -
+    int FALOAD = 48; // -
+    int DALOAD = 49; // -
+    int AALOAD = 50; // -
+    int BALOAD = 51; // -
+    int CALOAD = 52; // -
+    int SALOAD = 53; // -
+    int ISTORE = 54; // visitVarInsn
+    int LSTORE = 55; // -
+    int FSTORE = 56; // -
+    int DSTORE = 57; // -
+    int ASTORE = 58; // -
+    // int ISTORE_0 = 59; // -
+    // int ISTORE_1 = 60; // -
+    // int ISTORE_2 = 61; // -
+    // int ISTORE_3 = 62; // -
+    // int LSTORE_0 = 63; // -
+    // int LSTORE_1 = 64; // -
+    // int LSTORE_2 = 65; // -
+    // int LSTORE_3 = 66; // -
+    // int FSTORE_0 = 67; // -
+    // int FSTORE_1 = 68; // -
+    // int FSTORE_2 = 69; // -
+    // int FSTORE_3 = 70; // -
+    // int DSTORE_0 = 71; // -
+    // int DSTORE_1 = 72; // -
+    // int DSTORE_2 = 73; // -
+    // int DSTORE_3 = 74; // -
+    // int ASTORE_0 = 75; // -
+    // int ASTORE_1 = 76; // -
+    // int ASTORE_2 = 77; // -
+    // int ASTORE_3 = 78; // -
+    int IASTORE = 79; // visitInsn
+    int LASTORE = 80; // -
+    int FASTORE = 81; // -
+    int DASTORE = 82; // -
+    int AASTORE = 83; // -
+    int BASTORE = 84; // -
+    int CASTORE = 85; // -
+    int SASTORE = 86; // -
+    int POP = 87; // -
+    int POP2 = 88; // -
+    int DUP = 89; // -
+    int DUP_X1 = 90; // -
+    int DUP_X2 = 91; // -
+    int DUP2 = 92; // -
+    int DUP2_X1 = 93; // -
+    int DUP2_X2 = 94; // -
+    int SWAP = 95; // -
+    int IADD = 96; // -
+    int LADD = 97; // -
+    int FADD = 98; // -
+    int DADD = 99; // -
+    int ISUB = 100; // -
+    int LSUB = 101; // -
+    int FSUB = 102; // -
+    int DSUB = 103; // -
+    int IMUL = 104; // -
+    int LMUL = 105; // -
+    int FMUL = 106; // -
+    int DMUL = 107; // -
+    int IDIV = 108; // -
+    int LDIV = 109; // -
+    int FDIV = 110; // -
+    int DDIV = 111; // -
+    int IREM = 112; // -
+    int LREM = 113; // -
+    int FREM = 114; // -
+    int DREM = 115; // -
+    int INEG = 116; // -
+    int LNEG = 117; // -
+    int FNEG = 118; // -
+    int DNEG = 119; // -
+    int ISHL = 120; // -
+    int LSHL = 121; // -
+    int ISHR = 122; // -
+    int LSHR = 123; // -
+    int IUSHR = 124; // -
+    int LUSHR = 125; // -
+    int IAND = 126; // -
+    int LAND = 127; // -
+    int IOR = 128; // -
+    int LOR = 129; // -
+    int IXOR = 130; // -
+    int LXOR = 131; // -
+    int IINC = 132; // visitIincInsn
+    int I2L = 133; // visitInsn
+    int I2F = 134; // -
+    int I2D = 135; // -
+    int L2I = 136; // -
+    int L2F = 137; // -
+    int L2D = 138; // -
+    int F2I = 139; // -
+    int F2L = 140; // -
+    int F2D = 141; // -
+    int D2I = 142; // -
+    int D2L = 143; // -
+    int D2F = 144; // -
+    int I2B = 145; // -
+    int I2C = 146; // -
+    int I2S = 147; // -
+    int LCMP = 148; // -
+    int FCMPL = 149; // -
+    int FCMPG = 150; // -
+    int DCMPL = 151; // -
+    int DCMPG = 152; // -
+    int IFEQ = 153; // visitJumpInsn
+    int IFNE = 154; // -
+    int IFLT = 155; // -
+    int IFGE = 156; // -
+    int IFGT = 157; // -
+    int IFLE = 158; // -
+    int IF_ICMPEQ = 159; // -
+    int IF_ICMPNE = 160; // -
+    int IF_ICMPLT = 161; // -
+    int IF_ICMPGE = 162; // -
+    int IF_ICMPGT = 163; // -
+    int IF_ICMPLE = 164; // -
+    int IF_ACMPEQ = 165; // -
+    int IF_ACMPNE = 166; // -
+    int GOTO = 167; // -
+    int JSR = 168; // -
+    int RET = 169; // visitVarInsn
+    int TABLESWITCH = 170; // visiTableSwitchInsn
+    int LOOKUPSWITCH = 171; // visitLookupSwitch
+    int IRETURN = 172; // visitInsn
+    int LRETURN = 173; // -
+    int FRETURN = 174; // -
+    int DRETURN = 175; // -
+    int ARETURN = 176; // -
+    int RETURN = 177; // -
+    int GETSTATIC = 178; // visitFieldInsn
+    int PUTSTATIC = 179; // -
+    int GETFIELD = 180; // -
+    int PUTFIELD = 181; // -
+    int INVOKEVIRTUAL = 182; // visitMethodInsn
+    int INVOKESPECIAL = 183; // -
+    int INVOKESTATIC = 184; // -
+    int INVOKEINTERFACE = 185; // -
+    int INVOKEDYNAMIC = 186; // visitInvokeDynamicInsn
+    int NEW = 187; // visitTypeInsn
+    int NEWARRAY = 188; // visitIntInsn
+    int ANEWARRAY = 189; // visitTypeInsn
+    int ARRAYLENGTH = 190; // visitInsn
+    int ATHROW = 191; // -
+    int CHECKCAST = 192; // visitTypeInsn
+    int INSTANCEOF = 193; // -
+    int MONITORENTER = 194; // visitInsn
+    int MONITOREXIT = 195; // -
+    // int WIDE = 196; // NOT VISITED
+    int MULTIANEWARRAY = 197; // visitMultiANewArrayInsn
+    int IFNULL = 198; // visitJumpInsn
+    int IFNONNULL = 199; // -
+    // int GOTO_W = 200; // -
+    // int JSR_W = 201; // -
 
-// TODO 举例...
+```
+无论是Java编写的各种框架/中间件，还是我们平常编写的业务代码，其方法体里都是由这些200个操作码和操作数构成，它们是字节码里重要的组成部分。正是因为字节码与具体的操作系统、处理器架构无关，才有了JVM语言的跨平台性，而字节码的"强规范性"也孕育出了很多字节码相关技术。
 
-## 为什么需要Bytecode Manipulation?
+"class文件"按照一定规范去描述一个类，如类名、父类、接口、常量池、属性、方法、注解等信息，在JVM看来，字节码无异于一个byte数组，如果能够在程序运行时按照规范去创建/修改这个byte数组，那我们就可以做到动态地控制程序的各种行为。然而去编写或修改一个符合规范的byte数组是很繁琐的事情，而bytecode manipulation则是辅助我们去构建这个"byte数组"的技术。没有找到好听的翻译，就称bytecode manipulation为动态字节码技术吧。
 
-先给出结论: TODO
+我们在日常开发中，可能很少直接接触到动态字节码技术，但我们用到的很多框架或工具内部其实都运用了这些技术，例如Spring Framework里使用cglib生成动态代理，来实现事务、异步方法、缓存、AOP等。另外还有MyBatis使用JDK动态代理、JRebel使用javassist和asm、Mockito/Hibernate使用Byte-Buddy等。当然还包括各种分析、Debug、Profiler等工具，其实动态字节码技术早已遍布在依托JVM的各个领域。
 
-在讨论为什么需要字节码增强技术之前，我们先谈谈Java语言本身。Java是一门静态类型语言，静态类型语言要求变量的类型需要显式指定且在编译期间是可知的，即当声明了变量后，其类型是无法修改的。
 
+## 为什么需要动态字节码技术?
+
+先给出一个等于没给的结论: 因为它能增加Java这门静态类型语言的动态能力，完成很多原本只有动态类型语言能完成的事。
+
+比如让Java动态地去创建类、修改和重新加载已经被加载的类等，当然你能够操控字节码其实就约等于你能干一切事情，全靠你的想象力。
+
+我们先谈谈Java语言本身。Java是一门静态类型语言，静态类型语言要求
+变量的类型需要显式指定且在编译期间是可知的，即当声明了变量后，其类型是无法修改的。
 ```java
 public class Main {
     public void main(String[] args) {
@@ -33,6 +331,7 @@ public class Main {
 ```
 
 而相较于静态类型语言，动态类型语言不用声明变量类型，变量类型在运行时才确定，即在编译期间变量可以指向各种"对象"，整体代码风格会非常简约, 如Python
+
 ```python
 if __name__ == "__main__":
     x = 12000  
@@ -63,23 +362,20 @@ if __name__ == "__main__":
     print(student.gender) # AttributeError: 'student' object has no attribute 'gender'
 ```
 
-但很多时候，尤其是在实现通用框架的时候，"框架"是无法知道"用户"使用哪些类型的，那框架怎么在不知道用户类型的情况下去调用用户方法呢？对于Python这种动态类型语言，由于在编码期间IDE无法推断变量类型，如下代码是不会报错的, 用户只需要在使用的时候传入实现了execute_sql的方法就行。
-
+但很多时候，尤其是在实现通用框架的时候，"框架"是无法知道"用户"使用哪些类型的，但框架往往也需要去调用用户定义的代码，那问题来了，框架怎么在不知道用户类型的情况下去调用用户方法呢？对于Python这种动态类型语言，由于在编码期间IDE无法推断变量类型，对象的方法调用是很"随意"的, 如以下片段：
 ```python
+# 由框架提前"编译"
 class DriverProxy:
    def __init__(self, driver):
       self.driver = driver
    def execute_sql(sql):
       self.driver.execute_sql(sql) # 不会报错
-    
- 
 ```
+框架完全可以在不知道用户类型的情况下去"编译"以上代码，用户在使用框架的时候自行传入实现了execute_sql方法的实例即可。
 
-对于Java这门静态类型语言来说，如果不确定变量的具体类型，是无法调用相应的方法的。那在Java里，框架一般如何去调用用户代码呢？介绍两种方式
+对于Java这门静态类型语言来说，在编码时如果不确定变量的具体类型，是无法调用相应的方法的。那Java的一些框架如何去调用用户代码呢？我知道的有以下两种方式：
 （便于说明，这里仅仅用一个静态代理来代表"第三方框架"）
-
-`方式1 （接口）`
-
+`方式1--多态 （接口和非final类）`
 ```java
 
 // 框架代码
@@ -113,8 +409,7 @@ public class Main {
     }
 }
 ```
-
-方式1借助接口，框架不用关心用户传入的变量具体是什么类型，只要用户传入任意一个具体的实现类，框架在运行时就能调用到具体用户代码啦。当然了这也得益于面向对象语言多态特性。
+Java是一门面向对象的语言，它具有多态性。如上，"框架代码"不用知道用户的具体类型就能被编译。用户在使用框架的时候传入一个具体的实现类，借助虚函数表等技术就能在运行的时候去动态绑定到具体的"用户方法"。
 
 `方式2 反射`
 
@@ -181,17 +476,17 @@ public class Main {
 3. 反射抛弃了Java静态语言类型的优势，即编译时类型检查。借助反射去执行一个方法时，method.invoke(...)的传参是否正确只有在运行时才能发现，"框架"显然不希望暴露给"用户"反射API,
    因为这会增加很多不确定性。
 
-当然以上问题不能遮盖反射在各种场景发挥的巨大作用，字节码增强技术往往也会搭配反射API使用。
+当然以上问题不能遮盖反射在各种场景发挥的巨大作用，动态字节码技术往往也会搭配反射API使用。
 
-`接下来进入正题---Bytecode Manipulation`
+反射为Java提供了"动态地读取类"的能力，而动态字节码技术却更侧重"动态地创建类和修改类"的能力。如果上面的这个"Secure框架"用动态字节码技术实现就会很容易和直观，一般思路为继承当前类，重载所有父类里被@Secure注解的方法，方法体里首先执行统一的安全校验逻辑，校验通过后再调用父类的"原始方法"，实际这也是动态字节码技术用的最多的一个场景---动态代理。
 
-Bytecode Manipulation让用户能够去操作字节码，进而能够控制类的各种行为。
 
-## 常用Bytecode Manipulation框架简单介绍
 
-当然，目前Bytecode Manipulation最常用的一个场景还是动态代理，动态代理可以增强用户定义的方法，比如增加日志、缓存逻辑、事务逻辑等。
+## 常用动态字节码技术介绍
+接下来进入正题，介绍几个常用的动态字节码技术，分别为JDK动态代理、javassist、asm、cglib、byte-buddy。
+
+目前动态字节码技术最常用的场景还是动态代理，动态代理可以增强用户定义的方法，比如增加日志、缓存逻辑、事务逻辑等。
 首先我们定义一个简单的接口和实现
-
 ```java
 public interface HelloService {
     void sayHello(String name);
@@ -240,7 +535,8 @@ public class JdkProxyTest {
 
 ### javassist
 
-javassist是一个使用起来相对比较简单的生成字节码的工具，它使用起来比较贴近Java的反射API。
+javassist是一个使用起来相对比较简单的技术，它的API比较贴近Java的反射API。
+
 它使用自己实现的一个Java编译器（不支持泛型），在调用一些创建/修改方法的API时，需要将java源码作为字符串入参，在编写一些复杂定制逻辑时还是很容易出错。
 建议作为学习使用。
 
@@ -383,10 +679,11 @@ public class ListUtil implements Serializable {
 ```
 
 ### asm
+asm是一个专注于字节码领域的框架，很多优秀的框架都使用了它，例如cglib、byte-buddy实质就是对asm的封装，就连JDK本身也将asm打包到了自己的命名空间里。
 
-asm是一个专门致力于bytecode manipulation的框架，很多优秀的框架都使用了它，例如cglib、byte-buddy实质就是对asm的封装，就连
-JDK本身也将asm打包到了自己的命名空间里。 TODO 如图
-所以在使用ASM的时候一定要注意不要import错包了。
+![](https://bj.bcebos.com/cookie/img_5.png))
+
+从上图也可以看出很多框架都将ASM打包到了自己的命名空间里，所以在使用ASM的时候一定要注意不要import错包了。
 
 asm基于观察者设计模式设计了一套Visitor API, 核心由ClassReader(读取已有类)、ClassVisitor(修改类的各种行为)、ClassWriter(输出结果)。
 其使用起来比较偏底层，先来看看用ASM完全从零创建一个类的画风。例如我们想要实现以下这个POJO类
@@ -590,11 +887,8 @@ public class StudentDump implements Opcodes {
 
 ```
 
-从上面的例子可以看出，使用ASM visitor api就像在手动书写".class"字节码文件一样，这里面的每一个API基本都能找到对应的操作码
-TODO 如图
-
-你需要按照一定顺序去调用各个API，如果顺序出现问题则会"编写"出不合法的class文件，所以这对不了解class文件以及JVM底层执行方法逻辑的
-小伙伴不是很友好。asm提供出来的api实在是太琐碎了，但基于观察者这种设计模式，当我们仅仅是想对已有类的部分模块进行修改时，则只需要重载相应的方法，当你熟悉了这种模式后，你就会发现ASM相较于其它bytecode manipulation能够完成更多细腻的功能。
+从这个简单的POJO类可以看出，使用ASM visitor api就像在手动书写".class"字节码文件一样：你需要按照一定顺序去调用各个API，如果顺序出现问题则会"编写"出不合法的class文件，所以这对不了解class文件以及JVM底层执行方法逻辑的
+小伙伴不是很友好。asm提供出来的api实在是太琐碎了，但基于观察者这种设计模式，对于一些简单的场景，我们只需要重载相应的方法即可。
 
 #### 使用模板
 
@@ -602,7 +896,7 @@ TODO 如图
 public class Main {
     public static void main(String[] args) throws Exception {
         ClassReader classReader = new ClassReader("..."); // class全限定名
-        ClassWriter classWriter = new ClassWriter(classReader, ClassWriter.COMPUTE_FRAMES);
+        ClassWriter classWriter = new ClassWriter(classReader, ClassWriter.COMPUTE_FRAMES); // 自动计算操作数栈最大深度和局部变量表的变量个数以及stack map frames
         ClassVisitor classVisitor = new ClassVisitor(Opcodes.ASM9, classWriter) {
             // override 各种方法
         };
@@ -855,11 +1149,9 @@ public class CglibProxyTest {
 
 ### byte-buddy
 
-接下来我们介绍一下byte-buddy这个框架，它实质也是对ASM框架的封装。相较于前面几个前辈，byte-buddy出身较晚，它2013年底才开源，且我从commit提交记录和社区问答
-里发现这个项目至今几乎一直是[Rafael Winterhalter](https://github.com/raphw) 一个人在维护。但是从我最近对byte-buddy api的学习，
-它的api使用体验是比较好的，更重要的是它暴露出了部分ASM visitor api（尽管作者不建议我们使用），这使得byte-buddy的功能性也变得很强大。
-废话不多说，我们又又又又双叒叕来实现一个动态代理
+接下来我们介绍一下byte-buddy这个框架，它实质也是对ASM框架的封装。相较于前面几个前辈，byte-buddy出身较晚，它2013年底才开源，且从commit提交记录和社区问答里发现这个项目至今几乎一直是[Rafael Winterhalter](https://github.com/raphw) 一个人在维护。但是它的api使用体验是比较好的，最重要的是它定义了各种选择器(ElementMatcher)，让你可以非常方便地选择对哪些类的哪些方法进行修改，这些选择器让用户自行用ASM API实现是非常繁琐的。并且它也暴露出了部分ASM visitor api，这使得byte-buddy兼具了易用性和功能完备性。
 
+废话不多说，我们又又又又双叒叕来实现一个动态代理
 ```java
 public class ByteBuddyProxyTest {
     public static class LogImplementation {
@@ -899,13 +1191,13 @@ public class ByteBuddyProxyTest {
 
 ### java agent是什么
 
-java agent是java很早就有的一个概念，运用字节码增强技术时一般都会和java agent搭配使用。那什么是java agent呢？
+java agent是java很早就有的一个概念，使用动态字节码技术时一般都会和java agent搭配使用。那什么是java agent呢？
 
 我的理解是它是一个类加载的网关：当类被加载到类加载器之前，java agent可以对已经读取的字节码流进行修改，从而来控制类的各种行为。既然它是一个网关，那我们就可以对每一个加载到JVM里的类（当然，部分jdk的类会在使用java agent前初始化）进行统一控制，而不用像上面所有例子一样针对每一个类都要手动去编写一大段代码,这里我们先看一下java agent如何使用, 它有两种使用方式，一种是是可插拔式的静态使用方式(通过启动时指定jvm参数)，一种是利用java的attach api的动态使用方式（动态attach到已经启动的JVM进程）
 
 ### 静态使用方式
 
-`创建一个类，像main方法一样写一个固定的premain方法`
+`创建一个类，像main方法一样写一个固定签名的premain方法`
 
 ```java
 public class JavaAgentTemplate {
@@ -996,34 +1288,41 @@ public class MyByteBuddyLogAgent {
 JVM提供了attach api, 其实我们经常使用的jstack、jmap等命令实际都借助了它，简单来看看它是啥。
 ```java
 public class AttachApiTest {
-    public static void main(String[] args) throws Exception {
-        // 模拟jps命令
-        List<VirtualMachineDescriptor> list = VirtualMachine.list();
-        for (VirtualMachineDescriptor virtualMachineDescriptor : list) {
-            String id = virtualMachineDescriptor.id();
-            String name = virtualMachineDescriptor.displayName();
-            System.out.println(String.format("%s %s", id, name));
-        }
+   public static void main(String[] args) throws Exception {
+      // 模拟jps命令
+      List<VirtualMachineDescriptor> list = VirtualMachine.list();
+      for (VirtualMachineDescriptor virtualMachineDescriptor : list) {
+         String id = virtualMachineDescriptor.id();
+         String name = virtualMachineDescriptor.displayName();
+         System.out.println(String.format("%s %s", id, name));
+      }
 
-        // 模拟jstack
-        VirtualMachine virtualMachine = VirtualMachine.attach("17729"); // 替换pid
-        HotSpotVirtualMachine hotSpotVirtualMachine = (HotSpotVirtualMachine) virtualMachine;
-        InputStream inputStream = hotSpotVirtualMachine.remoteDataDump();
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
-        bufferedReader.lines().forEach(System.out::println);
+      VirtualMachine virtualMachine = null;
+      try {
+         // 模拟jstack
+         virtualMachine = VirtualMachine.attach("17729"); // 替换成你自己的pid
+         HotSpotVirtualMachine hotSpotVirtualMachine = (HotSpotVirtualMachine) virtualMachine;
+         InputStream inputStream = hotSpotVirtualMachine.remoteDataDump();
+         BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+         bufferedReader.lines().forEach(System.out::println);
 
-        // 模拟jmap -histo:live
-        inputStream = hotSpotVirtualMachine.heapHisto();
-        bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
-        bufferedReader.lines().forEach(System.out::println);
+         // 模拟jmap -histo:live
+         inputStream = hotSpotVirtualMachine.heapHisto();
+         bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+         bufferedReader.lines().forEach(System.out::println);
 
-        // 动态使用java agent, 无返回值
-        hotSpotVirtualMachine.loadAgent("{YourPath}/{your-agent}.jar");
-    }
+         // 动态加载java agent, 无返回值
+         hotSpotVirtualMachine.loadAgent("{YourPath}/{your-agent}.jar");
+      } finally {
+         if (Objects.nonNull(virtualMachine)) {
+            virtualMachine.detach();
+         }
+      }
+   }
 }
 ```
-简单来说, attach api可以与一个正在运行的JVM进程进行通信(会起一个Attach Listener线程)，而loadAgent方法则用来动态使用java agent。
-一旦调用了这个api, 被attach的jvm进程会在Attach Listener线程里去执行对应agent jar的agentMain方法，它与premain一样，格式如下。
+简单来说, attach api可以与一个正在运行的JVM进程进行通信(会起一个Attach Listener线程)，而loadAgent方法则用来动态加载java agent。
+一旦调用了这个api, 被attach的jvm进程会在Attach Listener线程里去执行对应agent jar的agentmain方法，它与premain一样有固定的方法签名。
 ```java
 public class JavaAgentTemplate {
     public static void agentmain(String args, Instrumentation instrumentation) {
@@ -1041,10 +1340,14 @@ public class JavaAgentTemplate {
     }
 }
 ```
-执行完agentmain方法之后，之后的类在被加载到类加载器前都会被ClassFileTransformer拦截， 其它地方与静态使用方式(-javaagent)没有太大差异。
+执行完agentmain方法之后，之后"新类"在被加载到类加载器前都会被ClassFileTransformer拦截， 其它地方与静态使用方式(-javaagent)没有太大差异。
 
-### 两种方式对比
-对比下来，Java Agent的静态使用方式可以从jvm刚开始运行时就去管控类的加载，在生产环境里经常使用这种方式，然而它的"缺点"就是使用起来太麻烦：需要指定MANIFEST.MF, 且需要增加JVM参数(-javaagent) 。动态使用方式需要调用attach api, 且也需要指定agent jar的路径，但是ByteBuddy已经为我们封装好了这个步骤，只需要调用ByteBuddyAgent.install(), 就能返回关键的instrumentation实例，使用起来相对静态方式会简单很多
+很多时候，目标JVM已经运行了很久，我们更多需要地是重新加载已经加载的类，Instrumentation也提供了相应的API retransformClasses，那具体怎么使用呢？
+TODO
+
+### 其它
+对比下来，Java Agent的静态使用方式可以从jvm刚开始运行时就去管控类的加载，在生产环境里经常使用这种方式，然而它的"缺点"就是使用起来太麻烦：需要指定MANIFEST.MF, 且需要增加JVM参数(-javaagent) 。
+动态使用方式需要调用attach api, 且参数需要指定agent jar的路径，但我们有时候只想快速调试当前程序，ByteBuddy已经为我们封装好self-attaching api， 我们只需要调用ByteBuddyAgent.install(), 就能返回关键的instrumentation实例，使用起来相对静态方式会简单很多
 
 ```java
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -1052,19 +1355,19 @@ import java.util.concurrent.Phaser;
 
 public class DynamicJavaAgentTest {
    public static void main(String[] args) {
-      // 1、attach当前JVM
+       
+      // self-attaching 
+      // 1、获取当前JVM进程的pid
       // 2、找到byte-buddy-agent.jar的文件地址
       // 3、调用VirtualMachine的loadAgent方法
       // 4、返回instrumentation实例
       Instrumentation instrumentation = ByteBuddyAgent.install();
-
 
       instrumentation.addTransformer(new ClassFileTransformer() {
          @Override
          public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
             // your logic
             // 一旦获取到instrumentation实例后，你可以任意使用javassist/asm/cglib/byte-buddy
-
 
             System.out.println(String.format("%s被加载", className));
             return classfileBuffer;
