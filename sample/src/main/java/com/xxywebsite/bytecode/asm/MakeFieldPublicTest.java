@@ -18,7 +18,7 @@ public class MakeFieldPublicTest {
         ClassVisitor classVisitor = new ClassVisitor(Opcodes.ASM9, classWriter) {
             @Override
             public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
-                return super.visitField(Opcodes.ACC_PUBLIC, name, descriptor, signature, value);
+                return super.visitField(Opcodes.ACC_PUBLIC, name, descriptor, signature, value); // 这里其实需要进行一些位运算，否则会丢失其它flag，如volatile、static
             }
         };
         classReader.accept(classVisitor, 0);

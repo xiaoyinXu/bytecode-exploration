@@ -1,6 +1,26 @@
 # Java Bytecode Manipulation Exploration
 
-## 什么是动态字节码技术？
+* [什么是动态字节码技术](#什么是动态字节码技术)
+* [为什么需要动态字节码技术](#为什么需要动态字节码技术)
+* [常用动态字节码技术介绍](#常用动态字节码技术介绍)
+ * [jdk proxy](#jdk-proxy)
+ * [javassist](#javassist)
+ * [asm](#asm)
+ * [cglib](#cglib)
+ * [byte-buddy](#byte-buddy)]
+* [java agent](#java-agent)
+ * [java agent是什么](#java-agent是什么)
+ * [静态使用方式](#静态使用方式)
+ * [动态使用方式](#动态使用方式)
+    * [Java Attach API](#Java-Attach-API)
+    * [Self Attaching](#Self-Attaching)
+    * [重新加载类](#重新加载类)
+ * [其它用法](#其它用法)
+
+
+
+
+## 什么是动态字节码技术
 
 字节码是JVM平台语言（如Java、Kotlin、Scala、groovy）的概念，本文以Java为例。javac编译器并不会将Java源文件直接编译成机器代码，而是编译成以.class为后缀的文件并持久化到硬盘上，当程序被执行的时候，".class文件"会被加载到内存里，而".class"文件存储的内容其实就是字节码。
 
@@ -312,7 +332,7 @@ Constant pool:
 我们在日常开发中，可能很少直接接触到动态字节码技术，但我们用到的很多框架或工具内部其实都运用了这些技术，例如Spring Framework里使用cglib生成动态代理，来实现事务、异步方法、缓存、AOP等。另外还有MyBatis使用JDK动态代理、JRebel使用javassist和asm、Mockito/Hibernate使用Byte-Buddy等。当然还包括各种分析、Debug、Profiler等工具，其实动态字节码技术早已遍布在依托JVM的各个领域。
 
 
-## 为什么需要动态字节码技术?
+## 为什么需要动态字节码技术
 
 先给出一个等于没给的结论: 因为它能增加Java这门静态类型语言的动态能力，完成很多原本只有动态类型语言能完成的事。
 
@@ -540,8 +560,7 @@ javassist是一个使用起来相对比较简单的技术，它的API比较贴�
 它使用自己实现的一个Java编译器（不支持泛型），在调用一些创建/修改方法的API时，需要将java源码作为字符串入参，在编写一些复杂定制逻辑时还是很容易出错。
 建议作为学习使用。
 
-####动态代理
-
+`动态代理`
 ```java
 public class JavassistProxyTest {
     public static void main(String[] args) throws Exception {
@@ -558,8 +577,7 @@ public class JavassistProxyTest {
 }
 ```
 
-#### 去除所有println
-
+`去除所有println`
 ```java
 public class RemovePrintlnTest {
     public static class MathOperator {
@@ -594,8 +612,7 @@ public class RemovePrintlnTest {
 
 ```
 
-#### 创建一个class
-
+`创建一个class`
 ```java
 /**
  * @author xuxiaoyin
@@ -890,8 +907,7 @@ public class StudentDump implements Opcodes {
 从这个简单的POJO类可以看出，使用ASM visitor api就像在手动书写".class"字节码文件一样：你需要按照一定顺序去调用各个API，如果顺序出现问题则会"编写"出不合法的class文件，所以这对不了解class文件以及JVM底层执行方法逻辑的
 小伙伴不是很友好。asm提供出来的api实在是太琐碎了，但基于观察者这种设计模式，对于一些简单的场景，我们只需要重载相应的方法即可。
 
-#### 使用模板
-
+`使用模板`
 ```java
 public class Main {
     public static void main(String[] args) throws Exception {
@@ -908,12 +924,8 @@ public class Main {
 }
 ```
 
-例如我们想要去掉类的一个注解
-
-#### 删除/增加注解
 
 `删除注解`
-
 ```java
 public class RemoveClassAnnotationTest {
     @Deprecated
@@ -941,7 +953,6 @@ public class RemoveClassAnnotationTest {
 ```
 
 `增加注解`
-
 ```java
 public class AddClassAnnotationTest {
     public static class A {
@@ -968,8 +979,7 @@ public class AddClassAnnotationTest {
 }
 ```
 
-#### 修改实例属性的access flag
-
+`修改实例属性的access flag`
 ```java
 public class MakeFieldPublicTest {
     public static class Student {
@@ -982,7 +992,7 @@ public class MakeFieldPublicTest {
         ClassVisitor classVisitor = new ClassVisitor(Opcodes.ASM9, classWriter) {
             @Override
             public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
-                return super.visitField(Opcodes.ACC_PUBLIC, name, descriptor, signature, value);
+                return super.visitField(Opcodes.ACC_PUBLIC, name, descriptor, signature, value); // 这里其实需要进行一些位运算，否则会丢失其它flag，如volatile、static
             }
         };
         classReader.accept(classVisitor, 0);
@@ -995,8 +1005,7 @@ public class MakeFieldPublicTest {
 }
 ```
 
-#### 打印日志
-
+`打印日志`
 只要不涉及到方法体，asm使用起来还不是很复杂。但是如果涉及到方法体、尤其是增加一些try-catch、try-finally逻辑时，用asm实现起来就很痛苦。
 例如我们想为以下方法增加一个日志
 
@@ -1009,7 +1018,6 @@ public class MathUtil {
 ```
 
 如果我们想将其变成
-
 ```java
 public class MathUtil {
     public static int add(int num1, int num2) {
@@ -1024,8 +1032,6 @@ public class MathUtil {
 ```
 
 其对应的asm实现如下
-// TODO
-
 ```java
 public class AddFinallyLogTest {
     public static class MathUtil {
@@ -1183,7 +1189,7 @@ public class ByteBuddyProxyTest {
 }
 ```
 
-第一次接触Byte-Buddy的小伙伴可能会觉得这个api使用起来非常啰嗦（习惯就好），但实际上这是为了能让用户能做更细腻度的控制。首先subclass代表你要继承哪个类或者实现哪个接口，之后method(...)用于筛选你想要进行拦截/重载的方法，以上就是过滤掉了Object声明的一些方法，紧接着intercept(...)就是方法的实现，这里最常用的api就是MethodDelegation(方法委托),它将原先的方法重载并委托给了其它类/对象。
+第一次接触Byte-Buddy的小伙伴可能会觉得这个api使用起来比较麻烦，但实际上这是为了能让用户能做更细腻度的控制。首先subclass代表你要继承哪个类或者实现哪个接口，之后method(...)用于筛选你想要进行拦截/重载的方法，以上就是过滤掉了Object声明的一些方法，紧接着intercept(...)就是方法的实现，这里最常用的api就是MethodDelegation(方法委托),它将原先的方法重载并委托给了其它类/对象。
 
 我们重点看看这个LogImplementation这个类的实现，一般被委托的类会实现一个且仅一个方法，而最重要的地方就是方法、方法参数上的注解。@RuntimeType加在了方法上，代表这个方法的返回值可以是任意类型，假如不用这个注解，那么返回值必须和被委托方法(即sayHello(String))保持一致：void。而方法参数的注解@Origin, 指明当前method是被委托方法，而@SuperCall，指明当前callable包含了被委托方法的执行逻辑，我们只需要执行callable.call()就能触发被委托方法的逻辑。除了这些注解还有几个常用的注解, 例如`@This Object this`指明当前object是代理类实例的this指针，`@AllArguments Object[] args`指明args是方法的所有调用参数。一旦参数上加上了这些注解，用byte-buddy操作字节码生成的类在调用被委托方法前，会将这些被注解的参数按照语义赋值后，再调用LogImplementation.invoke方法,还有其它注解这里就不一一举例了。
 
@@ -1243,7 +1249,7 @@ Premain-Class: com.xxywebsite.bytecode.common.JavaAgentTemplate
 </build>
 ```
 
-打包成jar包，记住jar包的路径，在你启动JVM进程前增加JMV参数(替换成自己的路径)
+打包成jar包(一般为fat-jar)，记住jar包的路径，在你启动JVM进程前增加JMV参数(替换成自己的路径)
 
 ```
 java -javaagent /Users/xuxiaoyin/Projects/bytecode-exploration/sample/target/bytecode-manipulation-sample-1.0-SNAPSHOT.jar -cp ${YourClassPath} ${YourMainClass}
@@ -1280,11 +1286,11 @@ public class MyByteBuddyLogAgent {
 }
 ```
 
-以上和我们用byte-buddy实现动态代理很像，但值得注意的是通过java agent增强的类在classloader看来还是原先的类，并非当成代理。
+以上和我们用byte-buddy实现动态代理很像，但值得注意的是通过java agent增强的类在classloader看来还是原先的类，并非代理类。
 
 ### 动态使用方式
 首先介绍Attach API
-#### Attach API
+#### Java Attach API
 JVM提供了attach api, 其实我们经常使用的jstack、jmap等命令实际都借助了它，简单来看看它是啥。
 ```java
 public class AttachApiTest {
@@ -1322,7 +1328,12 @@ public class AttachApiTest {
 }
 ```
 简单来说, attach api可以与一个正在运行的JVM进程进行通信(会起一个Attach Listener线程)，而loadAgent方法则用来动态加载java agent。
-一旦调用了这个api, 被attach的jvm进程会在Attach Listener线程里去执行对应agent jar的agentmain方法，它与premain一样有固定的方法签名。
+一旦调用了这个api, 被attach的jvm进程会在Attach Listener线程里去执行对应agent jar入口类的agentmain方法，它与premain一样，需要在MANIFEST.MF里增加配置。
+```
+Agent-Class: com.xxywebsite.bytecode.common.JavaAgentTemplate
+```
+
+并和main方法、premain方法一样，需要定义一个固定入参、返回值的agentmain方法：
 ```java
 public class JavaAgentTemplate {
     public static void agentmain(String args, Instrumentation instrumentation) {
@@ -1340,15 +1351,30 @@ public class JavaAgentTemplate {
     }
 }
 ```
-执行完agentmain方法之后，之后"新类"在被加载到类加载器前都会被ClassFileTransformer拦截， 其它地方与静态使用方式(-javaagent)没有太大差异。
 
-很多时候，目标JVM已经运行了很久，我们更多需要地是重新加载已经加载的类，Instrumentation也提供了相应的API retransformClasses，那具体怎么使用呢？
-TODO
+打包成jar包(一般为fat-jar)，记住jar包的路径，通过Java Attach Api让目标JVM动态加载agent
+```java
+public class LoadAgentApp {
+   public static void main(String[] args) throws Exception {
+      VirtualMachine virtualMachine = null;
+      try {
+         virtualMachine = VirtualMachine.attach("17729"); // 替换成你自己的pid
+         HotSpotVirtualMachine hotSpotVirtualMachine = (HotSpotVirtualMachine) virtualMachine;
+         // 动态加载java agent
+         hotSpotVirtualMachine.loadAgent("{YourPath}/{your-agent}.jar");
+      } finally {
+         if (Objects.nonNull(virtualMachine)) {
+            virtualMachine.detach();
+         }
+      }
+   }
+}
+```
 
-### 其它
-对比下来，Java Agent的静态使用方式可以从jvm刚开始运行时就去管控类的加载，在生产环境里经常使用这种方式，然而它的"缺点"就是使用起来太麻烦：需要指定MANIFEST.MF, 且需要增加JVM参数(-javaagent) 。
-动态使用方式需要调用attach api, 且参数需要指定agent jar的路径，但我们有时候只想快速调试当前程序，ByteBuddy已经为我们封装好self-attaching api， 我们只需要调用ByteBuddyAgent.install(), 就能返回关键的instrumentation实例，使用起来相对静态方式会简单很多
+目前进程会使用Attach Listener线程执行agentmain方法，之后"新类"在被加载到类加载器前都会被ClassFileTransformer拦截。
 
+#### Self Attaching
+从上面的例子可以看出动态使用Java Agent的步骤也挺繁琐的，但实际上在开发调试过程中我们可以使用self-attach来免除上面的步骤。ByteBuddy已经为我们封装好self-attaching api，我们只需要调用ByteBuddyAgent.install(), 就能返回关键的instrumentation对象。
 ```java
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Phaser;
@@ -1381,6 +1407,31 @@ public class DynamicJavaAgentTest {
 }
 ```
 
-#### Java Agent的"妙用"
+#### 重新加载类
+很多时候目标JVM已经运行很久了，该加载的类都已经加载得差不多了，这个时候如果我们需要增强一些方法，就需要重新加载已经加载的类，我们先看个例子
+```java
+public class ReloadStringClassTest {
+    public static void main(String[] args) throws Exception {
+        // self-attach
+        Instrumentation instrumentation = ByteBuddyAgent.install();
+        
+        instrumentation.addTransformer(new ClassFileTransformer() {
+            @Override
+            public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
+                if (className.replace("/", ".").equals("java.lang.String")) {
+                    System.out.println("java.lang.String被重新加载");
+                }
+                return classfileBuffer;
+            }
+        }, true);
+        instrumentation.retransformClasses(String.class); // 打印java.lang.String被重新加载
+        instrumentation.retransformClasses(String.class); // 打印java.lang.String被重新加载（可被重新加载多次）
+    }
+}
+```
+使用ByteBuddyAgent API可以让我们灵活选择要重新加载哪些类和增强哪些方法。
+TODO
+
+#### 其它用法
 Java Attach API只暴露了有限的方法，而loadAgent可以让我们执行指定jar包的agentmain方法，除了增加ClassFileTransformer外，实际上你可以在agentmain
 执行任意逻辑，例如像[arthas](https://github.com/alibaba/arthas)一样，启动很多监听线程，后续可以直接与外界进行进程通信。
