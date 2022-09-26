@@ -7,7 +7,7 @@
  * [javassist](#javassist)
  * [asm](#asm)
  * [cglib](#cglib)
- * [byte-buddy](#byte-buddy)]
+ * [byte-buddy](#byte-buddy)
 * [java agent](#java-agent)
  * [java agent是什么](#java-agent是什么)
  * [静态使用方式](#静态使用方式)
