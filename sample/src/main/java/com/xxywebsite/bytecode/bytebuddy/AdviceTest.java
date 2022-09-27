@@ -1,5 +1,6 @@
 package com.xxywebsite.bytecode.bytebuddy;
 
+import com.alibaba.fastjson.JSONObject;
 import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
@@ -10,7 +11,6 @@ import net.bytebuddy.utility.JavaModule;
 
 import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
-import java.util.Arrays;
 
 /**
  * @author xuxiaoyin
@@ -30,11 +30,12 @@ public class AdviceTest {
         }
 
         @Advice.OnMethodExit
-        public static void onExit(@Advice.Local("startTs") long startTs, @Advice.AllArguments Object[] allArguments, @Advice.Origin("#m") String methodName) {
+        public static void onExit(@Advice.Local("startTs") long startTs, @Advice.AllArguments Object[] allArguments, @Advice.Return Object retVal, @Advice.Origin("#m") String methodName) {
             long endTs = System.currentTimeMillis();
-            System.out.println(String.format("方法:%s, 入参为:%s, 共耗时:%dms", methodName, Arrays.toString(allArguments), endTs - startTs));
+            System.out.println(String.format("方法:%s, 入参为:%s, 返回值:%s, 共耗时:%dms", methodName, JSONObject.toJSONString(allArguments), JSONObject.toJSONString(retVal), endTs - startTs));
         }
     }
+
 
     public static void main(String[] args) {
         A.add(3, 4);
@@ -52,7 +53,7 @@ public class AdviceTest {
                 })
                 .installOn(instrumentation);
 
-        A.add(3, 4);
+        A.add(3, 4); // 方法:add, 入参为:[3,4], 返回值:7, 共耗时:0ms
     }
 
 }
