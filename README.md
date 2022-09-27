@@ -1430,7 +1430,49 @@ public class ReloadStringClassTest {
 }
 ```
 使用ByteBuddyAgent API可以让我们灵活选择要重新加载哪些类和增强哪些方法。
-TODO
+比如我们想重新加载Object，"破坏"toString方法
+```java
+public class ModifyObjectToStringTest {
+    public static class A {
+        @Override
+        public String toString() {
+            return super.toString();
+        }
+    }
+
+    // 修改Object toString方法，并重新加载Object类
+    public static void main(String[] args) {
+        Object o = new Object();
+        System.out.println(o.toString());
+
+        // self attaching
+        Instrumentation instrumentation = ByteBuddyAgent.install();
+
+        new AgentBuilder
+                .Default()
+                .ignore(nameStartsWith("zxczczx.zxczc.xzczxc")) // 这一行的意义？ TODO
+                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .disableClassFormatChanges()
+                .type(named("java.lang.Object"))
+                .transform(new AgentBuilder.Transformer() {
+                    @Override
+                    public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, ProtectionDomain protectionDomain) {
+                        return builder
+                                .method(named("toString"))
+                                .intercept(FixedValue.value("123"));
+                    }
+                })
+                .installOn(instrumentation);
+
+
+        System.out.println(o.toString()); // 123
+    }
+}
+```
+
+一般重新加载类会和Advice API使用，Advice相较于Byte Buddy里常用的MethodDelegation还是有很大的不同，它们都用于增强方法，前者是直接在原方法的前后增加逻辑，后者是通过委托给其它方法执行。
+
+
 
 #### 其它用法
 Java Attach API只暴露了有限的方法，而loadAgent可以让我们执行指定jar包的agentmain方法，除了增加ClassFileTransformer外，实际上你可以在agentmain

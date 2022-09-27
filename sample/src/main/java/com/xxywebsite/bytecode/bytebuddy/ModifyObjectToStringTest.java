@@ -18,15 +18,10 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
  * @since 2022/9/26
  **/
 public class ModifyObjectToStringTest {
-    public static class A {
-        @Override
-        public String toString() {
-            return super.toString();
-        }
-    }
-
     // 修改Object toString方法，并重新加载Object类
     public static void main(String[] args) {
+        Object o = new Object();
+        System.out.println(o.toString());
 
         // self attaching
         Instrumentation instrumentation = ByteBuddyAgent.install();
@@ -48,7 +43,6 @@ public class ModifyObjectToStringTest {
                 .installOn(instrumentation);
 
 
-        Object o = new Object();
-        System.out.println(o.toString());
+        System.out.println(o.toString()); // 123
     }
 }
