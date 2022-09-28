@@ -20,7 +20,8 @@
 ## 什么是动态字节码技术
 
 字节码是JVM平台语言（如Java、Kotlin、Scala、groovy）的概念，本文以Java为例。javac编译器并不会将Java源文件直接编译成机器代码，而是编译成以.class为后缀的文件并持久化到硬盘上，当程序被执行的时候，"
-.class文件"会被加载到内存里，而".class"文件存储的内容其实就是字节码。
+.class文件"会被加载到内存里，而".class"文件存储的内容其实就是字节码。字节码文件的详细规范可查阅 [The Class File Format](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html)。
+
 
 如以下HelloWorld.java文件编译后的字节码文件为HelloWorld.class
 
